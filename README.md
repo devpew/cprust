@@ -1,16 +1,21 @@
 # cprust
 
-A minimal file and directory copy utility written in Rust. Supports recursive directory copying, relative and absolute paths, automatic destination detection, and same-file/directory protection.
+A feature-rich file and directory copy utility written in Rust. Supports recursive copying, symbolic links, metadata preservation, progress bars, multiple sources, and more.
 
 ## Features
 
 - Copy files and directories recursively
-- `-r` / `-R` flag support for recursive directory copying
-- Automatic directory detection — if the destination is an existing directory, the source name is appended
-- Support for both relative and absolute paths
+- Symbolic link support (copy as symlink or follow)
+- Preserve file metadata (timestamps, permissions)
+- Progress bar for large files and directories
+- Multiple source files to a single destination directory
+- Recreate full directory structure with `--parents`
+- No-clobber and force overwrite modes
+- Verbose and quiet output modes
+- Relative and absolute path support
 - Protection against copying a file or directory onto itself
 - Protection against overwriting a file with a directory
-- Clear error messages for missing files, identical source/destination, and invalid operations
+- Clear error messages for all failure modes
 
 ## Installation
 
@@ -33,18 +38,28 @@ cargo install --path .
 ## Usage
 
 ```bash
-cprust [-r] <source> <destination>
+cprust [OPTION]... SOURCE... DESTINATION
 ```
 
 ### Options
 
 | Flag | Description |
 |------|-------------|
-| `-r`, `-R` | Copy directories recursively (required for directories) |
+| `-r`, `-R` | Copy directories recursively |
+| `-v` | Verbose mode — print each copied file |
+| `-q` | Quiet mode — suppress output |
+| `-p` | Preserve file metadata (timestamps, permissions) |
+| `-L` | Follow symbolic links (copy target, not link) |
+| `-P` | Do not follow symbolic links (copy as symlink, default) |
+| `-n` | No-clobber — do not overwrite existing files |
+| `-f` | Force — overwrite existing files |
+| `--parents` | Recreate full directory structure |
+| `--progress` | Show progress bar for large files |
+| `-h`, `--help` | Show help message |
 
 ### Examples
 
-**Copy a file to a new location:**
+**Copy a file:**
 
 ```bash
 cprust file.txt /tmp/file.txt
@@ -56,28 +71,65 @@ cprust file.txt /tmp/file.txt
 cprust file.txt /tmp/
 ```
 
+**Copy multiple files to a directory:**
+
+```bash
+cprust file1.txt file2.txt dir/
+```
+
 **Copy a directory recursively:**
 
 ```bash
 cprust -r mydir /tmp/
 ```
 
-**Copy a directory to a new location:**
+**Copy with verbose output:**
 
 ```bash
-cprust -R ./source_dir ./backup_dir
+cprust -rv mydir /tmp/
 ```
 
-**Copy using relative paths:**
+**Copy preserving metadata:**
 
 ```bash
-cprust file.txt ./backup/
+cprust -rp mydir /tmp/
 ```
 
-**Copy using absolute paths:**
+**Copy with progress bar:**
 
 ```bash
-cprust /home/user/docs/file.txt /var/backups/file.txt
+cprust --progress largefile.iso /backup/
+```
+
+**Copy without overwriting existing files:**
+
+```bash
+cprust -n file.txt /tmp/
+```
+
+**Force overwrite:**
+
+```bash
+cprust -f file.txt /tmp/existing.txt
+```
+
+**Recreate directory structure:**
+
+```bash
+cprust --parents a/b/c/file.txt /backup/
+# Creates /backup/a/b/c/file.txt
+```
+
+**Follow symbolic links:**
+
+```bash
+cprust -L link.txt /tmp/
+```
+
+**Copy symbolic links as links:**
+
+```bash
+cprust -P link.txt /tmp/
 ```
 
 ## Error Handling
@@ -90,10 +142,26 @@ The tool returns a non-zero exit code on errors:
 | `are the same file` | Source and destination resolve to the same file |
 | `are the same directory` | Source and destination resolve to the same directory |
 | `cannot overwrite file with directory` | Attempting to copy a directory over an existing file |
+| `cannot copy multiple sources to ... which does not exist` | Multiple sources require an existing directory as destination |
+| `omitting directory (use -r for recursive)` | Attempting to copy a directory without `-r` flag |
 
 ## Requirements
 
 - Rust 1.75+ (Edition 2024)
+
+## Testing
+
+```bash
+cargo test
+```
+
+## CI
+
+This project uses GitHub Actions for continuous integration:
+
+- **Clippy** — lint checks with `-D warnings`
+- **Tests** — full integration test suite
+- **Format** — `cargo fmt` style checks
 
 ## License
 
