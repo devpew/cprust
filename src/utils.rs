@@ -13,6 +13,74 @@ pub fn resolve_path(p: &Path) -> PathBuf {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_resolve_absolute_path() {
+        let p = Path::new("/tmp/test");
+        let resolved = resolve_path(p);
+        assert!(resolved.is_absolute());
+        assert_eq!(resolved, Path::new("/tmp/test"));
+    }
+
+    #[test]
+    fn test_resolve_relative_path() {
+        let cwd = env::current_dir().unwrap();
+        let p = Path::new("foo/bar");
+        let resolved = resolve_path(p);
+        assert_eq!(resolved, cwd.join("foo/bar"));
+    }
+
+    #[test]
+    fn test_build_parents_path() {
+        let src = Path::new("a/b/c/file.txt");
+        let dst = Path::new("/backup");
+        let result = build_parents_path(src, dst);
+        assert_eq!(result, Path::new("/backup/a/b/c"));
+    }
+
+    #[test]
+    fn test_build_parents_path_no_parent() {
+        let src = Path::new("file.txt");
+        let dst = Path::new("/backup");
+        let result = build_parents_path(src, dst);
+        assert_eq!(result, Path::new("/backup"));
+    }
+
+    #[test]
+    fn test_count_dir_bytes() {
+        let dir = "/tmp/cprust_unit_count";
+        let _ = fs::remove_dir_all(dir);
+        fs::create_dir_all(format!("{}/sub", dir)).unwrap();
+
+        let mut f1 = fs::File::create(format!("{}/a.txt", dir)).unwrap();
+        f1.write_all(b"12345").unwrap();
+
+        let mut f2 = fs::File::create(format!("{}/sub/b.txt", dir)).unwrap();
+        f2.write_all(b"6789012345").unwrap();
+
+        let total = count_dir_bytes(Path::new(dir), false).unwrap();
+        assert_eq!(total, 15);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_count_empty_dir_bytes() {
+        let dir = "/tmp/cprust_unit_empty";
+        let _ = fs::remove_dir_all(dir);
+        fs::create_dir_all(dir).unwrap();
+
+        let total = count_dir_bytes(Path::new(dir), false).unwrap();
+        assert_eq!(total, 0);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+}
+
 pub fn preserve_metadata(src: &Path, dst: &Path) -> io::Result<()> {
     let meta = fs::metadata(src)?;
 
