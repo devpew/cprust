@@ -39,7 +39,7 @@ mod tests {
         let src = Path::new("a/b/c/file.txt");
         let dst = Path::new("/backup");
         let result = build_parents_path(src, dst);
-        assert_eq!(result, Path::new("/backup/a/b/c"));
+        assert_eq!(result, Path::new("/backup/a/b/c/file.txt"));
     }
 
     #[test]
@@ -47,7 +47,7 @@ mod tests {
         let src = Path::new("file.txt");
         let dst = Path::new("/backup");
         let result = build_parents_path(src, dst);
-        assert_eq!(result, Path::new("/backup"));
+        assert_eq!(result, Path::new("/backup/file.txt"));
     }
 
     #[test]
@@ -162,7 +162,11 @@ pub fn count_dir_bytes(dir: &Path, follow_symlinks: bool) -> io::Result<u64> {
 
 pub fn build_parents_path(src: &Path, dst: &Path) -> PathBuf {
     if let Some(parent) = src.parent() {
-        dst.join(parent)
+        if let Some(filename) = src.file_name() {
+            dst.join(parent).join(filename)
+        } else {
+            dst.join(parent)
+        }
     } else {
         dst.to_path_buf()
     }

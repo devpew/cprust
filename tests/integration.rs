@@ -411,3 +411,291 @@ fn test_preserve_flag() {
     cleanup(src_dir);
     cleanup(dst);
 }
+
+#[test]
+fn test_parents_flag() {
+    let base = "/tmp/cprust_test_parents";
+    let src_dir = format!("{}/src", base);
+    let dst_dir = format!("{}/dst", base);
+    cleanup(base);
+
+    fs::create_dir_all(format!("{}/a/b/c", src_dir)).unwrap();
+    fs::create_dir_all(&dst_dir).unwrap();
+    create_file(&src_dir, "a/b/c/file.txt", "deep file");
+
+    let output = run_cp(&["--parents", "a/b/c/file.txt", &dst_dir])
+        .current_dir(&src_dir)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "cp failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        format!("{}/a/b/c/file.txt", dst_dir)
+            .parse::<std::path::PathBuf>()
+            .unwrap()
+            .exists()
+    );
+
+    cleanup(base);
+}
+
+#[test]
+fn test_quiet_mode() {
+    let src_dir = "/tmp/cprust_test_quiet_src";
+    let dst = "/tmp/cprust_test_quiet_dst";
+    cleanup(src_dir);
+    cleanup(dst);
+
+    create_file(src_dir, "qfile.txt", "quiet test");
+
+    let output = run_cp(&["-v", "-q", "qfile.txt", dst])
+        .current_dir(src_dir)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.is_empty(),
+        "quiet mode should suppress verbose output"
+    );
+
+    cleanup(src_dir);
+    cleanup(dst);
+}
+
+#[test]
+fn test_follow_symlinks() {
+    let dir = "/tmp/cprust_test_follow";
+    cleanup(dir);
+
+    fs::create_dir_all(dir).unwrap();
+    create_file(dir, "real.txt", "real content");
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs as unix_fs;
+        let real_path = format!("{}/real.txt", dir);
+        let link_path = format!("{}/link.txt", dir);
+        unix_fs::symlink(&real_path, &link_path).unwrap();
+    }
+
+    let dst = format!("{}/copied_content", dir);
+
+    let output = run_cp(&["-L", "link.txt", &dst])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "cp failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let content = fs::read_to_string(&dst).unwrap();
+    assert_eq!(content, "real content");
+
+    cleanup(dir);
+}
+
+#[test]
+fn test_progress_flag() {
+    let src_dir = "/tmp/cprust_test_progress_src";
+    let dst = "/tmp/cprust_test_progress_dst";
+    cleanup(src_dir);
+    cleanup(dst);
+
+    create_file(src_dir, "progress.txt", "progress data");
+
+    let output = run_cp(&["--progress", "progress.txt", dst])
+        .current_dir(src_dir)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "cp failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(dst.parse::<std::path::PathBuf>().unwrap().exists());
+
+    cleanup(src_dir);
+    cleanup(dst);
+}
+
+#[test]
+fn test_recursive_flag_r() {
+    let src_dir = "/tmp/cprust_test_R_src";
+    let dst = "/tmp/cprust_test_R_dst";
+    cleanup(src_dir);
+    cleanup(dst);
+
+    fs::create_dir_all(format!("{}/sub", src_dir)).unwrap();
+    create_file(src_dir, "root.txt", "root");
+    create_file(src_dir, "sub/nested.txt", "nested");
+
+    let output = run_cp(&["-R", ".", dst])
+        .current_dir(src_dir)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "cp failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        format!("{}/root.txt", dst)
+            .parse::<std::path::PathBuf>()
+            .unwrap()
+            .exists()
+    );
+    assert!(
+        format!("{}/sub/nested.txt", dst)
+            .parse::<std::path::PathBuf>()
+            .unwrap()
+            .exists()
+    );
+
+    cleanup(src_dir);
+    cleanup(dst);
+}
+
+#[test]
+fn test_no_clobber_in_directory() {
+    let src_dir = "/tmp/cprust_test_ncdir_src";
+    let dst_dir = "/tmp/cprust_test_ncdir_dst";
+    cleanup(src_dir);
+    cleanup(dst_dir);
+
+    fs::create_dir_all(dst_dir).unwrap();
+    create_file(src_dir, "file.txt", "source content");
+    create_file(dst_dir, "file.txt", "existing content");
+
+    let output = run_cp(&["-n", "-r", src_dir, dst_dir]).output().unwrap();
+
+    assert!(output.status.success());
+    let content = fs::read_to_string(format!("{}/file.txt", dst_dir)).unwrap();
+    assert_eq!(content, "existing content");
+
+    cleanup(src_dir);
+    cleanup(dst_dir);
+}
+
+#[test]
+fn test_verbose_recursive() {
+    let src_dir = "/tmp/cprust_test_vr_src";
+    let dst = "/tmp/cprust_test_vr_dst";
+    cleanup(src_dir);
+    cleanup(dst);
+
+    fs::create_dir_all(format!("{}/sub", src_dir)).unwrap();
+    create_file(src_dir, "a.txt", "aaa");
+    create_file(src_dir, "sub/b.txt", "bbb");
+
+    let output = run_cp(&["-rv", ".", dst])
+        .current_dir(src_dir)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("a.txt"));
+    assert!(stdout.contains("b.txt"));
+
+    cleanup(src_dir);
+    cleanup(dst);
+}
+
+#[test]
+fn test_directory_to_existing_directory() {
+    let base_dir = "/tmp/cprust_test_d2d";
+    let src_dir = format!("{}/mydir", base_dir);
+    let dst_dir = format!("{}/dest", base_dir);
+    cleanup(base_dir);
+
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(format!("{}/sub", src_dir)).unwrap();
+    fs::create_dir_all(&dst_dir).unwrap();
+    create_file(&src_dir, "root.txt", "root");
+    create_file(&src_dir, "sub/nested.txt", "nested");
+
+    let output = run_cp(&["-r", "mydir", "dest"])
+        .current_dir(base_dir)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "cp failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        format!("{}/mydir/root.txt", dst_dir)
+            .parse::<std::path::PathBuf>()
+            .unwrap()
+            .exists()
+    );
+    assert!(
+        format!("{}/mydir/sub/nested.txt", dst_dir)
+            .parse::<std::path::PathBuf>()
+            .unwrap()
+            .exists()
+    );
+
+    cleanup(base_dir);
+}
+
+#[test]
+fn test_copy_directory_over_file_fails() {
+    let src_dir = "/tmp/cprust_test_d2f_src";
+    let dst_file = "/tmp/cprust_test_d2f_file";
+    cleanup(src_dir);
+    let _ = fs::remove_file(dst_file);
+
+    fs::create_dir_all(format!("{}/sub", src_dir)).unwrap();
+    create_file(src_dir, "inner.txt", "inner");
+
+    // Create an actual file at destination so copy-dir fails
+    fs::write(dst_file, "existing file").unwrap();
+
+    let output = run_cp(&["-r", src_dir, dst_file]).output().unwrap();
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("cannot overwrite file"));
+
+    cleanup(src_dir);
+    let _ = fs::remove_file(dst_file);
+}
+
+#[test]
+fn test_preserve_recursive() {
+    let src_dir = "/tmp/cprust_test_pr_src";
+    let dst = "/tmp/cprust_test_pr_dst";
+    cleanup(src_dir);
+    cleanup(dst);
+
+    fs::create_dir_all(format!("{}/sub", src_dir)).unwrap();
+    create_file(src_dir, "root.txt", "root");
+    create_file(src_dir, "sub/nested.txt", "nested");
+
+    let output = run_cp(&["-rp", ".", dst])
+        .current_dir(src_dir)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "cp failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    cleanup(src_dir);
+    cleanup(dst);
+}

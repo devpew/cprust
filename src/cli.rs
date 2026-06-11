@@ -30,29 +30,44 @@ pub fn parse_args() -> ParsedArgs {
     while i < args.len() {
         let arg = &args[i];
 
-        match arg.as_str() {
-            "-r" | "-R" => opts.recursive = true,
-            "-v" => opts.verbose = true,
-            "-q" => opts.quiet = true,
-            "-p" => opts.preserve = true,
-            "-L" => opts.follow_symlinks = true,
-            "-P" => opts.follow_symlinks = false,
-            "-n" => opts.no_clobber = true,
-            "-f" => opts.force = true,
-            "--parents" => opts.parents = true,
-            "--progress" => opts.progress = true,
-            "-h" | "--help" => {
-                print_usage(prog);
-                std::process::exit(0);
+        if arg.starts_with("--") {
+            match arg.as_str() {
+                "--parents" => opts.parents = true,
+                "--progress" => opts.progress = true,
+                "--help" => {
+                    print_usage(prog);
+                    std::process::exit(0);
+                }
+                _ => {
+                    eprintln!("{}: unknown option '{}'", prog, arg);
+                    print_usage(prog);
+                    std::process::exit(1);
+                }
             }
-            _ if arg.starts_with('-') => {
-                eprintln!("{}: unknown option '{}'", prog, arg);
-                print_usage(prog);
-                std::process::exit(1);
+        } else if arg.starts_with('-') && arg.len() > 1 {
+            for ch in arg[1..].chars() {
+                match ch {
+                    'r' | 'R' => opts.recursive = true,
+                    'v' => opts.verbose = true,
+                    'q' => opts.quiet = true,
+                    'p' => opts.preserve = true,
+                    'L' => opts.follow_symlinks = true,
+                    'P' => opts.follow_symlinks = false,
+                    'n' => opts.no_clobber = true,
+                    'f' => opts.force = true,
+                    'h' => {
+                        print_usage(prog);
+                        std::process::exit(0);
+                    }
+                    _ => {
+                        eprintln!("{}: unknown option '-{}'", prog, ch);
+                        print_usage(prog);
+                        std::process::exit(1);
+                    }
+                }
             }
-            _ => {
-                sources.push(arg.into());
-            }
+        } else {
+            sources.push(arg.into());
         }
 
         i += 1;

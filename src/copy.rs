@@ -69,7 +69,7 @@ pub fn copy_sources(sources: &[PathBuf], destination: &Path, opts: &Options) -> 
             .to_string();
 
         let final_dest = if opts.parents {
-            utils::build_parents_path(&src_resolved, &dst)
+            utils::build_parents_path(src, &dst)
         } else {
             dst.join(&src_name)
         };
@@ -123,6 +123,38 @@ fn copy_one(src: &Path, dst: &Path, opts: &Options, state: &mut CopyState) -> io
     copy_single_file(&src_resolved, dst, opts, state)
 }
 
+fn canonicalize_or_original(p: &Path) -> PathBuf {
+    if p.exists() {
+        return p.canonicalize().ok().unwrap_or_else(|| p.to_path_buf());
+    }
+    // Find nearest existing ancestor
+    let mut candidate = p.to_path_buf();
+    let mut suffix_parts: Vec<String> = Vec::new();
+
+    while !candidate.exists() {
+        if let Some(fn_name) = candidate.file_name() {
+            suffix_parts.push(fn_name.to_string_lossy().to_string());
+        }
+        if let Some(parent) = candidate.parent() {
+            candidate = parent.to_path_buf();
+        } else {
+            break;
+        }
+    }
+
+    if candidate.exists() {
+        let base = candidate.canonicalize().ok().unwrap_or(candidate);
+        suffix_parts.reverse();
+        let mut result = base;
+        for part in &suffix_parts {
+            result = result.join(part);
+        }
+        result
+    } else {
+        p.to_path_buf()
+    }
+}
+
 fn copy_single_file(
     src: &Path,
     dst: &Path,
@@ -136,26 +168,7 @@ fn copy_single_file(
         )
     })?;
 
-    let dst_canonical = if dst.exists() {
-        dst.canonicalize().map_err(|e| {
-            io::Error::new(
-                e.kind(),
-                format!("cannot canonicalize '{}': {}", dst.display(), e),
-            )
-        })?
-    } else if let Some(parent) = dst.parent() {
-        parent
-            .canonicalize()
-            .map_err(|e| {
-                io::Error::new(
-                    e.kind(),
-                    format!("cannot canonicalize parent '{}': {}", parent.display(), e),
-                )
-            })?
-            .join(dst.file_name().unwrap_or_default())
-    } else {
-        dst.to_path_buf()
-    };
+    let dst_canonical = canonicalize_or_original(dst);
 
     if src_canonical == dst_canonical {
         return Err(io::Error::other(format!(
@@ -261,26 +274,7 @@ fn copy_dir_recursive(
         dst.to_path_buf()
     };
 
-    let dst_canonical = if effective_dst.exists() {
-        effective_dst.canonicalize().map_err(|e| {
-            io::Error::new(
-                e.kind(),
-                format!("cannot canonicalize '{}': {}", effective_dst.display(), e),
-            )
-        })?
-    } else if let Some(parent) = effective_dst.parent() {
-        parent
-            .canonicalize()
-            .map_err(|e| {
-                io::Error::new(
-                    e.kind(),
-                    format!("cannot canonicalize parent '{}': {}", parent.display(), e),
-                )
-            })?
-            .join(effective_dst.file_name().unwrap_or_default())
-    } else {
-        effective_dst.clone()
-    };
+    let dst_canonical = canonicalize_or_original(&effective_dst);
 
     if src_canonical == dst_canonical {
         return Err(io::Error::other(format!(
