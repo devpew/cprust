@@ -1,6 +1,6 @@
 # cprust
 
-A feature-rich file and directory copy utility written in Rust. Supports recursive copying, symbolic links, metadata preservation, progress bars, multiple sources, and more.
+A feature-rich file and directory copy utility written in Rust. Supports recursive copying, symbolic links, metadata preservation, progress bars, multiple sources, hard links, backup, exclude patterns, and more.
 
 ## Features
 
@@ -11,11 +11,18 @@ A feature-rich file and directory copy utility written in Rust. Supports recursi
 - Multiple source files to a single destination directory
 - Recreate full directory structure with `--parents`
 - No-clobber and force overwrite modes
+- Update mode — only copy when source is newer (`-u`)
+- Dry run — preview what would be copied (`--dry-run`)
+- Interactive mode — prompt before overwrite (`-i`)
+- Backup existing files before overwrite (`-b`)
+- Exclude files by glob pattern (`--exclude`)
+- Hard link instead of copy (`-l`)
+- No target directory mode (`-T`)
 - Verbose and quiet output modes
+- Colored output for files, directories, and status
+- Summary statistics (files, dirs, bytes, speed)
 - Relative and absolute path support
 - Protection against copying a file or directory onto itself
-- Protection against overwriting a file with a directory
-- Clear error messages for all failure modes
 
 ## Installation
 
@@ -53,8 +60,16 @@ cprust [OPTION]... SOURCE... DESTINATION
 | `-P` | Do not follow symbolic links (copy as symlink, default) |
 | `-n` | No-clobber — do not overwrite existing files |
 | `-f` | Force — overwrite existing files |
+| `-u` | Update — only copy when source is newer than destination |
+| `-i` | Interactive — prompt before overwriting |
+| `-b` | Backup — create `.bak` file before overwriting |
+| `-l` | Create hard link instead of copying (Unix) |
+| `-T` | No target directory — treat destination as a file |
 | `--parents` | Recreate full directory structure |
 | `--progress` | Show progress bar for large files |
+| `--dry-run` | Show what would be copied without copying |
+| `--exclude=PAT` | Exclude files/dirs matching glob pattern |
+| `--version` | Show version |
 | `-h`, `--help` | Show help message |
 
 ### Examples
@@ -101,16 +116,41 @@ cprust -rp mydir /tmp/
 cprust --progress largefile.iso /backup/
 ```
 
-**Copy without overwriting existing files:**
+**Dry run — preview what would be copied:**
 
 ```bash
-cprust -n file.txt /tmp/
+cprust -rv --dry-run mydir /tmp/
 ```
 
-**Force overwrite:**
+**Update — only copy newer files:**
 
 ```bash
-cprust -f file.txt /tmp/existing.txt
+cprust -ru mydir /backup/
+```
+
+**Backup before overwrite:**
+
+```bash
+cprust -b file.txt /tmp/
+```
+
+**Exclude log files:**
+
+```bash
+cprust -rv --exclude='*.log' mydir /tmp/
+```
+
+**Create hard link:**
+
+```bash
+cprust -l file.txt /tmp/file_link
+```
+
+**No target directory:**
+
+```bash
+cprust -rT mydir /tmp/
+# Copies contents of mydir directly into /tmp/
 ```
 
 **Recreate directory structure:**
@@ -126,10 +166,10 @@ cprust --parents a/b/c/file.txt /backup/
 cprust -L link.txt /tmp/
 ```
 
-**Copy symbolic links as links:**
+**Interactive mode:**
 
 ```bash
-cprust -P link.txt /tmp/
+cprust -i file.txt /tmp/
 ```
 
 ## Error Handling
@@ -155,14 +195,26 @@ The tool returns a non-zero exit code on errors:
 cargo test
 ```
 
+## Benchmarks
+
+```bash
+cargo bench
+```
+
 ## CI
 
 This project uses GitHub Actions for continuous integration:
 
 - **Clippy** — lint checks with `-D warnings`
-- **Tests** — full integration test suite
+- **Tests** — full test suite on Ubuntu, macOS, and Windows
 - **Format** — `cargo fmt` style checks
+- **Coverage** — code coverage with `cargo-llvm-cov`
+- **Audit** — security audit with `cargo audit`
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

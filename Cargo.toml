@@ -1,8 +1,23 @@
 [package]
 name = "cprust"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
+description = "A feature-rich file and directory copy utility written in Rust"
+repository = "https://github.com/devpew/cprust"
+license = "MIT"
+readme = "README.md"
+keywords = ["copy", "cp", "file", "utility"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 indicatif = "0.17"
 filetime = "0.2"
+globset = "0.4"
+owo-colors = "4"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "copy_bench"
+harness = false

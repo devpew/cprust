@@ -13,74 +13,6 @@ pub fn resolve_path(p: &Path) -> PathBuf {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::env;
-
-    #[test]
-    fn test_resolve_absolute_path() {
-        let p = Path::new("/tmp/test");
-        let resolved = resolve_path(p);
-        assert!(resolved.is_absolute());
-        assert_eq!(resolved, Path::new("/tmp/test"));
-    }
-
-    #[test]
-    fn test_resolve_relative_path() {
-        let cwd = env::current_dir().unwrap();
-        let p = Path::new("foo/bar");
-        let resolved = resolve_path(p);
-        assert_eq!(resolved, cwd.join("foo/bar"));
-    }
-
-    #[test]
-    fn test_build_parents_path() {
-        let src = Path::new("a/b/c/file.txt");
-        let dst = Path::new("/backup");
-        let result = build_parents_path(src, dst);
-        assert_eq!(result, Path::new("/backup/a/b/c/file.txt"));
-    }
-
-    #[test]
-    fn test_build_parents_path_no_parent() {
-        let src = Path::new("file.txt");
-        let dst = Path::new("/backup");
-        let result = build_parents_path(src, dst);
-        assert_eq!(result, Path::new("/backup/file.txt"));
-    }
-
-    #[test]
-    fn test_count_dir_bytes() {
-        let dir = "/tmp/cprust_unit_count";
-        let _ = fs::remove_dir_all(dir);
-        fs::create_dir_all(format!("{}/sub", dir)).unwrap();
-
-        let mut f1 = fs::File::create(format!("{}/a.txt", dir)).unwrap();
-        f1.write_all(b"12345").unwrap();
-
-        let mut f2 = fs::File::create(format!("{}/sub/b.txt", dir)).unwrap();
-        f2.write_all(b"6789012345").unwrap();
-
-        let total = count_dir_bytes(Path::new(dir), false).unwrap();
-        assert_eq!(total, 15);
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_count_empty_dir_bytes() {
-        let dir = "/tmp/cprust_unit_empty";
-        let _ = fs::remove_dir_all(dir);
-        fs::create_dir_all(dir).unwrap();
-
-        let total = count_dir_bytes(Path::new(dir), false).unwrap();
-        assert_eq!(total, 0);
-
-        let _ = fs::remove_dir_all(dir);
-    }
-}
-
 pub fn preserve_metadata(src: &Path, dst: &Path) -> io::Result<()> {
     let meta = fs::metadata(src)?;
 
@@ -88,12 +20,12 @@ pub fn preserve_metadata(src: &Path, dst: &Path) -> io::Result<()> {
     {
         use std::os::unix::fs::PermissionsExt;
         let mode = meta.permissions().mode();
-        fs::set_permissions(dst, fs::Permissions::from_mode(mode))?;
+        fs::set_permissions(dst, fs::Permissions::from_mode(mode)).ok();
     }
 
     let atime = filetime::FileTime::from_last_access_time(&meta);
     let mtime = filetime::FileTime::from_last_modification_time(&meta);
-    filetime::set_file_times(dst, atime, mtime)?;
+    filetime::set_file_times(dst, atime, mtime).ok();
 
     Ok(())
 }
@@ -169,5 +101,128 @@ pub fn build_parents_path(src: &Path, dst: &Path) -> PathBuf {
         }
     } else {
         dst.to_path_buf()
+    }
+}
+
+pub fn build_exclude_matcher(patterns: &[String]) -> Result<globset::GlobSet, globset::Error> {
+    let mut builder = globset::GlobSetBuilder::new();
+    for pattern in patterns {
+        let glob = globset::Glob::new(pattern)?;
+        builder.add(glob);
+    }
+    builder.build()
+}
+
+pub fn is_excluded(path: &Path, matcher: &globset::GlobSet) -> bool {
+    if let Some(filename) = path.file_name()
+        && matcher.is_match(filename.to_string_lossy().as_ref())
+    {
+        return true;
+    }
+    matcher.is_match(path)
+}
+
+pub fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 6] = ["B", "KB", "MB", "GB", "TB", "PB"];
+    let mut size = bytes as f64;
+    let mut unit_idx = 0;
+
+    while size >= 1024.0 && unit_idx < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit_idx += 1;
+    }
+
+    if size < 10.0 {
+        format!("{:.2} {}", size, UNITS[unit_idx])
+    } else if size < 100.0 {
+        format!("{:.1} {}", size, UNITS[unit_idx])
+    } else {
+        format!("{:.0} {}", size, UNITS[unit_idx])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_resolve_absolute_path() {
+        let p = Path::new("/tmp/test");
+        let resolved = resolve_path(p);
+        assert!(resolved.is_absolute());
+        assert_eq!(resolved, Path::new("/tmp/test"));
+    }
+
+    #[test]
+    fn test_resolve_relative_path() {
+        let cwd = env::current_dir().unwrap();
+        let p = Path::new("foo/bar");
+        let resolved = resolve_path(p);
+        assert_eq!(resolved, cwd.join("foo/bar"));
+    }
+
+    #[test]
+    fn test_build_parents_path() {
+        let src = Path::new("a/b/c/file.txt");
+        let dst = Path::new("/backup");
+        let result = build_parents_path(src, dst);
+        assert_eq!(result, Path::new("/backup/a/b/c/file.txt"));
+    }
+
+    #[test]
+    fn test_build_parents_path_no_parent() {
+        let src = Path::new("file.txt");
+        let dst = Path::new("/backup");
+        let result = build_parents_path(src, dst);
+        assert_eq!(result, Path::new("/backup/file.txt"));
+    }
+
+    #[test]
+    fn test_count_dir_bytes() {
+        let dir = "/tmp/cprust_unit_count";
+        let _ = fs::remove_dir_all(dir);
+        fs::create_dir_all(format!("{}/sub", dir)).unwrap();
+
+        let mut f1 = fs::File::create(format!("{}/a.txt", dir)).unwrap();
+        f1.write_all(b"12345").unwrap();
+
+        let mut f2 = fs::File::create(format!("{}/sub/b.txt", dir)).unwrap();
+        f2.write_all(b"6789012345").unwrap();
+
+        let total = count_dir_bytes(Path::new(dir), false).unwrap();
+        assert_eq!(total, 15);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_count_empty_dir_bytes() {
+        let dir = "/tmp/cprust_unit_empty";
+        let _ = fs::remove_dir_all(dir);
+        fs::create_dir_all(dir).unwrap();
+
+        let total = count_dir_bytes(Path::new(dir), false).unwrap();
+        assert_eq!(total, 0);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_format_bytes() {
+        assert_eq!(format_bytes(0), "0.00 B");
+        assert_eq!(format_bytes(500), "500 B");
+        assert_eq!(format_bytes(1024), "1.00 KB");
+        assert_eq!(format_bytes(1536), "1.50 KB");
+        assert_eq!(format_bytes(1048576), "1.00 MB");
+        assert_eq!(format_bytes(1073741824), "1.00 GB");
+    }
+
+    #[test]
+    fn test_exclude_matcher() {
+        let matcher = build_exclude_matcher(&["*.log".to_string(), "*.tmp".to_string()]).unwrap();
+        assert!(is_excluded(Path::new("test.log"), &matcher));
+        assert!(is_excluded(Path::new("dir/cache.tmp"), &matcher));
+        assert!(!is_excluded(Path::new("test.txt"), &matcher));
     }
 }

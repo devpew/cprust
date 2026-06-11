@@ -11,6 +11,13 @@ pub struct Options {
     pub force: bool,
     pub parents: bool,
     pub progress: bool,
+    pub update: bool,
+    pub dry_run: bool,
+    pub interactive: bool,
+    pub backup: bool,
+    pub hard_link: bool,
+    pub no_target_dir: bool,
+    pub exclude: Vec<String>,
 }
 
 pub struct ParsedArgs {
@@ -31,12 +38,25 @@ pub fn parse_args() -> ParsedArgs {
         let arg = &args[i];
 
         if arg.starts_with("--") {
-            match arg.as_str() {
+            match arg.splitn(2, '=').collect::<Vec<_>>()[0] {
                 "--parents" => opts.parents = true,
                 "--progress" => opts.progress = true,
+                "--dry-run" => opts.dry_run = true,
+                "--version" => {
+                    println!("cprust {}", env!("CARGO_PKG_VERSION"));
+                    std::process::exit(0);
+                }
                 "--help" => {
                     print_usage(prog);
                     std::process::exit(0);
+                }
+                "--exclude" => {
+                    if arg.len() > 10 {
+                        opts.exclude.push(arg[10..].to_string());
+                    } else {
+                        eprintln!("{}: --exclude requires a pattern", prog);
+                        std::process::exit(1);
+                    }
                 }
                 _ => {
                     eprintln!("{}: unknown option '{}'", prog, arg);
@@ -55,6 +75,11 @@ pub fn parse_args() -> ParsedArgs {
                     'P' => opts.follow_symlinks = false,
                     'n' => opts.no_clobber = true,
                     'f' => opts.force = true,
+                    'u' => opts.update = true,
+                    'i' => opts.interactive = true,
+                    'b' => opts.backup = true,
+                    'l' => opts.hard_link = true,
+                    'T' => opts.no_target_dir = true,
                     'h' => {
                         print_usage(prog);
                         std::process::exit(0);
@@ -104,7 +129,15 @@ fn print_usage(prog: &str) {
     eprintln!("  -P              do not follow symbolic links (copy as symlink, default)");
     eprintln!("  -n              no-clobber, do not overwrite existing files");
     eprintln!("  -f              force, overwrite existing files");
+    eprintln!("  -u              update, only copy when source is newer than dest");
+    eprintln!("  -i              interactive, prompt before overwrite");
+    eprintln!("  -b              backup, create .bak file before overwrite");
+    eprintln!("  -l              create hard link instead of copying");
+    eprintln!("  -T              no-target-directory, treat destination as a file");
     eprintln!("  --parents       recreate full directory structure");
     eprintln!("  --progress      show progress bar for large files");
+    eprintln!("  --dry-run       show what would be copied without copying");
+    eprintln!("  --exclude=PAT   exclude files/dirs matching pattern (glob)");
+    eprintln!("  --version       show version");
     eprintln!("  -h, --help      show this help message");
 }
